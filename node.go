@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io/fs"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/caddyserver/caddy/v2"
@@ -20,7 +19,7 @@ var (
 )
 
 type node struct {
-	mu       sync.Mutex
+	mu       mutex
 	keyInfo  certmagic.KeyInfo
 	value    []byte
 	branches map[string]*node
@@ -28,6 +27,9 @@ type node struct {
 
 // Provision is ...
 func (nd *node) Provision(ctx caddy.Context) error {
+	if err := nd.mu.Provision(); err != nil {
+		return err
+	}
 	nd.keyInfo = certmagic.KeyInfo{
 		Key:        "",
 		Modified:   time.Now(),
@@ -52,8 +54,7 @@ func (nd *node) lock(ctx context.Context, keys []string) error {
 			return errWrongType
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
-			branch.mu.Lock()
-			return nil
+			return branch.mu.Lock(ctx)
 		}
 	default:
 		if nd.keyInfo.IsTerminal {
@@ -81,8 +82,7 @@ func (nd *node) unlock(ctx context.Context, keys []string) error {
 			return errWrongType
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
-			branch.mu.Unlock()
-			return nil
+			return branch.mu.Unlock(ctx)
 		}
 	default:
 		if nd.keyInfo.IsTerminal {
@@ -292,9 +292,6 @@ func (nd *node) stat(ctx context.Context, keys []string) (certmagic.KeyInfo, err
 			return certmagic.KeyInfo{}, fs.ErrNotExist
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
-			if !branch.keyInfo.IsTerminal {
-				return certmagic.KeyInfo{}, fs.ErrNotExist
-			}
 			return branch.keyInfo, nil
 		}
 	default:
