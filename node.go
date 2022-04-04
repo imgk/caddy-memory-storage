@@ -221,8 +221,8 @@ func (nd *node) exist(ctx context.Context, keys []string) bool {
 		if nd.keyInfo.IsTerminal {
 			return false
 		}
-		_, ok := nd.branches[keys[0]]
-		return ok
+		branch, ok := nd.branches[keys[0]]
+		return ok && branch.keyInfo.IsTerminal
 	default:
 		if nd.keyInfo.IsTerminal {
 			return false
@@ -292,6 +292,9 @@ func (nd *node) stat(ctx context.Context, keys []string) (certmagic.KeyInfo, err
 			return certmagic.KeyInfo{}, fs.ErrNotExist
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
+			if !branch.keyInfo.IsTerminal {
+				return certmagic.KeyInfo{}, fs.ErrNotExist
+			}
 			return branch.keyInfo, nil
 		}
 	default:
