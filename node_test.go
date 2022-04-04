@@ -11,7 +11,7 @@ var _ = fmt.Errorf
 func TestNode(t *testing.T) {
 	for _, v := range []struct {
 		Keys []string
-	} {
+	}{
 		{
 			Keys: []string{
 				"test/test1",

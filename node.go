@@ -14,7 +14,10 @@ import (
 
 const slash = "/"
 
-var errInvalidKey = errors.New("invalid key")
+var (
+	errInvalidKey = errors.New("invalid key")
+	errWrongType  = errors.New("invalid type")
+)
 
 type node struct {
 	mu       sync.Mutex
@@ -43,14 +46,19 @@ func (nd *node) Lock(ctx context.Context, key string) error {
 func (nd *node) lock(ctx context.Context, keys []string) error {
 	switch len(keys) {
 	case 0:
-		nd.mu.Lock()
-		return nil
+		return errWrongType
 	case 1:
+		if nd.keyInfo.IsTerminal {
+			return errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			branch.mu.Lock()
 			return nil
 		}
 	default:
+		if nd.keyInfo.IsTerminal {
+			return errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.lock(ctx, keys[1:])
 		}
@@ -67,14 +75,19 @@ func (nd *node) Unlock(ctx context.Context, key string) error {
 func (nd *node) unlock(ctx context.Context, keys []string) error {
 	switch len(keys) {
 	case 0:
-		nd.mu.Unlock()
-		return nil
+		return errWrongType
 	case 1:
+		if nd.keyInfo.IsTerminal {
+			return errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			branch.mu.Unlock()
 			return nil
 		}
 	default:
+		if nd.keyInfo.IsTerminal {
+			return errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.unlock(ctx, keys[1:])
 		}
@@ -91,26 +104,40 @@ func (nd *node) Store(ctx context.Context, key string, value []byte) error {
 func (nd *node) store(ctx context.Context, keys []string, value []byte) error {
 	switch len(keys) {
 	case 0:
-		nd.value = value
-		return nil
+		return errWrongType
 	case 1:
+		if nd.keyInfo.IsTerminal {
+			return errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
+			if !branch.keyInfo.IsTerminal {
+				return errWrongType
+			}
+			branch.keyInfo.Modified = time.Now()
+			branch.keyInfo.Size = int64(len(value))
 			branch.value = value
 			return nil
 		}
 		branch := new(node)
-		branch.branches = make(map[string]*node)
 		branch.keyInfo.Key = keys[0]
+		branch.keyInfo.Modified = time.Now()
+		branch.keyInfo.Size = int64(len(value))
+		branch.keyInfo.IsTerminal = true
 		branch.value = value
 		nd.branches[keys[0]] = branch
 		return nil
 	default:
+		if nd.keyInfo.IsTerminal {
+			return errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.store(ctx, keys[1:], value)
 		}
 		branch := new(node)
 		branch.branches = make(map[string]*node)
 		branch.keyInfo.Key = keys[0]
+		branch.keyInfo.Modified = time.Now()
+		branch.keyInfo.IsTerminal = false
 		nd.branches[keys[0]] = branch
 		return branch.store(ctx, keys[1:], value)
 	}
@@ -128,11 +155,23 @@ func (nd *node) load(ctx context.Context, keys []string) ([]byte, error) {
 	case 0:
 		return nd.value, nil
 	case 1:
+		if nd.keyInfo.IsTerminal {
+			return nil, errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
+			if !branch.keyInfo.IsTerminal {
+				return nil, errWrongType
+			}
 			return branch.value, nil
 		}
 	default:
+		if nd.keyInfo.IsTerminal {
+			return nil, errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
+			if branch.keyInfo.IsTerminal {
+				return nil, errWrongType
+			}
 			return branch.load(ctx, keys[1:])
 		}
 	}
@@ -148,14 +187,19 @@ func (nd *node) Delete(ctx context.Context, key string) error {
 func (nd *node) delete(ctx context.Context, keys []string) error {
 	switch len(keys) {
 	case 0:
-		nd.value = nil
-		return nil
+		return errWrongType
 	case 1:
+		if nd.keyInfo.IsTerminal {
+			return errWrongType
+		}
 		if _, ok := nd.branches[keys[0]]; ok {
 			delete(nd.branches, keys[0])
 			return nil
 		}
 	default:
+		if nd.keyInfo.IsTerminal {
+			return errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.delete(ctx, keys[1:])
 		}
@@ -174,9 +218,15 @@ func (nd *node) exist(ctx context.Context, keys []string) bool {
 	case 0:
 		return true
 	case 1:
+		if nd.keyInfo.IsTerminal {
+			return false
+		}
 		_, ok := nd.branches[keys[0]]
 		return ok
 	default:
+		if nd.keyInfo.IsTerminal {
+			return false
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.exist(ctx, keys[1:])
 		}
@@ -193,18 +243,27 @@ func (nd *node) List(ctx context.Context, prefix string, recursive bool) ([]stri
 func (nd *node) list(ctx context.Context, prefix string, keys []string, recursive bool) ([]string, error) {
 	switch len(keys) {
 	case 0:
-		return []string{}, nil
+		return nil, nil
 	case 1:
+		if nd.keyInfo.IsTerminal {
+			return nil, errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
+			if nd.keyInfo.IsTerminal {
+				return nil, errWrongType
+			}
 			return branch.dir(prefix, recursive), nil
 		}
 	default:
+		if nd.keyInfo.IsTerminal {
+			return nil, errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.list(ctx, prefix, keys[1:], recursive)
 		}
 	}
 
-	return []string{}, fs.ErrNotExist
+	return nil, fs.ErrNotExist
 }
 
 func (nd *node) dir(prefix string, recursive bool) []string {
@@ -213,7 +272,7 @@ func (nd *node) dir(prefix string, recursive bool) []string {
 		subprefix := prefix + k
 		keys = append(keys, subprefix)
 		if recursive {
-			keys = append(keys, v.dir(subprefix + slash, recursive)...)
+			keys = append(keys, v.dir(subprefix+slash, recursive)...)
 		}
 	}
 	return keys
@@ -229,10 +288,16 @@ func (nd *node) stat(ctx context.Context, keys []string) (certmagic.KeyInfo, err
 	case 0:
 		return nd.keyInfo, nil
 	case 1:
+		if nd.keyInfo.IsTerminal {
+			return certmagic.KeyInfo{}, errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.keyInfo, nil
 		}
 	default:
+		if nd.keyInfo.IsTerminal {
+			return certmagic.KeyInfo{}, errWrongType
+		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.stat(ctx, keys[1:])
 		}
