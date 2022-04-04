@@ -6,9 +6,8 @@ type mutex struct {
 	ch chan struct{}
 }
 
-func (mu *mutex) Provision() error {
+func (mu *mutex) Provision() {
 	mu.ch = make(chan struct{}, 1)
-	return nil
 }
 
 func (mu *mutex) Lock(ctx context.Context) error {

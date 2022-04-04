@@ -27,9 +27,6 @@ type node struct {
 
 // Provision is ...
 func (nd *node) Provision(ctx caddy.Context) error {
-	if err := nd.mu.Provision(); err != nil {
-		return err
-	}
 	nd.keyInfo = certmagic.KeyInfo{
 		Key:        "",
 		Modified:   time.Now(),
@@ -54,6 +51,9 @@ func (nd *node) lock(ctx context.Context, keys []string) error {
 			return errWrongType
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
+			if !branch.keyInfo.IsTerminal {
+				return errWrongType
+			}
 			return branch.mu.Lock(ctx)
 		}
 	default:
@@ -82,6 +82,9 @@ func (nd *node) unlock(ctx context.Context, keys []string) error {
 			return errWrongType
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
+			if !branch.keyInfo.IsTerminal {
+				return errWrongType
+			}
 			return branch.mu.Unlock(ctx)
 		}
 	default:
@@ -119,6 +122,7 @@ func (nd *node) store(ctx context.Context, keys []string, value []byte) error {
 			return nil
 		}
 		branch := new(node)
+		branch.mu.Provision()
 		branch.keyInfo.Key = keys[0]
 		branch.keyInfo.Modified = time.Now()
 		branch.keyInfo.Size = int64(len(value))
