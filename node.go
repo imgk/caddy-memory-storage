@@ -286,17 +286,17 @@ func (nd *node) Stat(ctx context.Context, key string) (certmagic.KeyInfo, error)
 func (nd *node) stat(ctx context.Context, keys []string) (certmagic.KeyInfo, error) {
 	switch len(keys) {
 	case 0:
-		return nd.keyInfo, nil
+		return nd.keyInfo, fs.ErrNotExist
 	case 1:
 		if nd.keyInfo.IsTerminal {
-			return certmagic.KeyInfo{}, errWrongType
+			return certmagic.KeyInfo{}, fs.ErrNotExist
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.keyInfo, nil
 		}
 	default:
 		if nd.keyInfo.IsTerminal {
-			return certmagic.KeyInfo{}, errWrongType
+			return certmagic.KeyInfo{}, fs.ErrNotExist
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			return branch.stat(ctx, keys[1:])
