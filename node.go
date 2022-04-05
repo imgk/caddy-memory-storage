@@ -173,9 +173,6 @@ func (nd *node) load(ctx context.Context, keys []string) ([]byte, error) {
 			return nil, errWrongType
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
-			if branch.keyInfo.IsTerminal {
-				return nil, errWrongType
-			}
 			return branch.load(ctx, keys[1:])
 		}
 	}
@@ -275,7 +272,7 @@ func (nd *node) dir(prefix string, recursive bool) []string {
 	for k, v := range nd.branches {
 		subprefix := prefix + k
 		keys = append(keys, subprefix)
-		if recursive {
+		if recursive && !v.keyInfo.IsTerminal {
 			keys = append(keys, v.dir(subprefix+slash, recursive)...)
 		}
 	}
