@@ -244,10 +244,13 @@ func (nd *node) List(ctx context.Context, prefix string, recursive bool) ([]stri
 func (nd *node) list(ctx context.Context, prefix string, keys []string, recursive bool) ([]string, error) {
 	switch len(keys) {
 	case 0:
-		return nil, nil
+		return nd.dir("", recursive), nil
 	case 1:
 		if nd.keyInfo.IsTerminal {
 			return nil, errWrongType
+		}
+		if keys[0] == "" {
+			return nd.dir(prefix, recursive), nil
 		}
 		if branch, ok := nd.branches[keys[0]]; ok {
 			if nd.keyInfo.IsTerminal {

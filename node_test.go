@@ -48,13 +48,26 @@ func TestNode(t *testing.T) {
 		for _, v := range []string{"test/", "imgk/"} {
 			keys, err := nd.List(ctx, v, false)
 			if err != nil {
-				t.Errorf("list key: %v, error", v)
+				t.Errorf("list key: %v, error: %v", v, err)
 			}
 			for _, vv := range keys {
 				// fmt.Println(vv)
 				if _, ok := keyMap[vv]; !ok {
 					t.Errorf("find key:%v, error", vv)
 				}
+			}
+		}
+
+		keyMap["test"] = struct{}{}
+		keyMap["imgk"] = struct{}{}
+		keys, err := nd.List(ctx, "", true)
+		if err != nil {
+			t.Errorf("list key: %v, error: %v", "[empty]", err)
+		}
+		for _, vv := range keys {
+			// fmt.Println(vv)
+			if _, ok := keyMap[vv]; !ok {
+				t.Errorf("find key:%v, error", vv)
 			}
 		}
 	}
